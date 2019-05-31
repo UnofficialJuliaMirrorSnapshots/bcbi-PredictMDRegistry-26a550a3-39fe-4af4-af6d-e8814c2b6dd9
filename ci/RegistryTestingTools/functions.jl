@@ -3,6 +3,20 @@
 import LibGit2
 import Pkg
 
+function maketempdir()::String
+    path::String = mktempdir()
+    atexit(() -> _force_remove_path(path))
+    return path
+end
+
+function _force_remove_path(path)::Nothing
+    try
+        rm(path; force = true, recursive = true)
+    catch
+    end
+    return nothing
+end
+
 function pairwise_equality(
         x::AbstractVector,
         y::AbstractVector,
@@ -35,6 +49,10 @@ function version_string_equality(x::String, y::String,)::Bool
         x_stripped_lowercase,
         VersionNumber(x_stripped),
         VersionNumber(x_stripped_lowercase),
+        strip(string(VersionNumber(x_stripped))),
+        strip(string(VersionNumber(x_stripped_lowercase))),
+        VersionNumber(strip(string(VersionNumber(x_stripped)))),
+        VersionNumber(strip(string(VersionNumber(x_stripped_lowercase)))),
         ]
     y_stripped::String = strip(y)
     y_stripped_lowercase::String = lowercase(y_stripped)
@@ -43,6 +61,10 @@ function version_string_equality(x::String, y::String,)::Bool
         y_stripped_lowercase,
         VersionNumber(y_stripped),
         VersionNumber(y_stripped_lowercase),
+        strip(string(VersionNumber(y_stripped))),
+        strip(string(VersionNumber(y_stripped_lowercase))),
+        VersionNumber(strip(string(VersionNumber(y_stripped)))),
+        VersionNumber(strip(string(VersionNumber(y_stripped_lowercase)))),
         ]
     result::Bool = any_pairwise_equality(
         all_x,
@@ -72,6 +94,154 @@ function is_valid_version_string(x::String)::Bool
     end
     result::Bool = result_stripped && result_stripped_lowercase
     return result
+end
+
+function compare_external_registry(
+        registry_path::AbstractString,
+        external_registry::Pkg.RegistrySpec;
+        job::AbstractString = ENV["JOB"],
+        config_file::AbstractString = joinpath(
+            registry_path,
+            "ci",
+            "ci.toml",
+            ),
+        )::Nothing
+    original_directory::String = pwd()
+    this_job_interval::AbstractInterval = _construct_interval(
+        convert(String, strip(job))
+        )
+    configuration::Dict{String,Any} = Pkg.TOML.parsefile(config_file)
+    registry_configuration_myregistry = Pkg.TOML.parsefile(
+        joinpath(registry_path,"Registry.toml",)
+        )
+    name_to_path_myregistry = Dict{String, String}()
+    for pair in registry_configuration_myregistry["packages"]
+        name = pair[2]["name"]
+        path = pair[2]["path"]
+        name_to_path_myregistry[name] = path
+    end
+    all_packages::Vector{String} = collect(keys(name_to_path_myregistry))
+    sort!(all_packages)
+    unique!(all_packages)
+    n = length(all_packages)
+    @debug("all_packages ($(n)):")
+    for i = 1:n
+        @debug("$(i). $(all_packages[i])")
+    end
+    _this_job_interval_contains_x(x) = _interval_contains_x(
+        this_job_interval,x,
+        )
+    packages_in_this_job_interval = all_packages[
+        _this_job_interval_contains_x.(all_packages)
+        ]
+    unique!(packages_in_this_job_interval)
+    sort!(packages_in_this_job_interval)
+    n = length(packages_in_this_job_interval)
+    @debug("packages_in_this_job_interval ($(n)):")
+    for i = 1:n
+        @debug("$(i). $(packages_in_this_job_interval[i])")
+    end
+    my_depot::String = joinpath(maketempdir(), "depot",)
+    my_environment::String = joinpath(maketempdir(), "depot",)
+    rm(my_depot; force = true, recursive = true,)
+    rm(my_environment;force = true,recursive = true,)
+    mkpath(my_depot)
+    mkpath(my_environment)
+    original_depot_path = [x for x in Base.DEPOT_PATH]
+    empty!(Base.DEPOT_PATH)
+    pushfirst!(Base.DEPOT_PATH, my_depot,)
+    Pkg.activate(my_environment)
+    Pkg.Registry.add(external_registry)
+    external_registry_afteradding::Pkg.Types.RegistrySpec = first(
+        Pkg.Types.collect_registries()
+        )
+    registry_configuration_externalregistry = Pkg.TOML.parsefile(
+        joinpath(external_registry_afteradding.path,"Registry.toml",)
+        )
+    name_to_path_externalregistry = Dict{String, String}()
+    for pair in registry_configuration_externalregistry["packages"]
+        name = pair[2]["name"]
+        path = pair[2]["path"]
+        name_to_path_externalregistry[name] = path
+    end
+    packages_in_external_registry = Set(
+        collect(keys(name_to_path_externalregistry))
+        )
+    n = length(packages_in_this_job_interval)
+    for i = 1:n
+        ### @debug(string("Checking git-tree-sha1 values for \"$(name)\" ","",))
+        name = packages_in_this_job_interval[i]
+        @debug(
+            string(
+                "Comparing git-tree-sha1 values for \"$(name)\" ",
+                "(package $(i) of $(n))",
+                )
+            )
+        my_path = name_to_path_myregistry[name]
+        if name in packages_in_external_registry
+            their_path = name_to_path_externalregistry[name]
+            my_versions_toml = Pkg.TOML.parsefile(
+                joinpath(
+                    registry_path,
+                    my_path,
+                    "Versions.toml",
+                    )
+                )
+            their_versions_toml = Pkg.TOML.parsefile(
+                joinpath(
+                    external_registry_afteradding.path,
+                    their_path,
+                    "Versions.toml",
+                    )
+                )
+            my_version_strings = collect(keys(my_versions_toml))
+            their_version_strings = collect(keys(their_versions_toml))
+            for j = 1:length(my_version_strings)
+                my_version = my_version_strings[j]
+                my_git_tree_sha1 = strip(
+                    my_versions_toml[
+                        my_version]["git-tree-sha1"]
+                    )
+                for k = 1:length(their_version_strings)
+                    their_version = their_version_strings[k]
+                    if version_string_equality(my_version, their_version)
+                        their_git_tree_sha1 = strip(
+                            their_versions_toml[
+                                their_version]["git-tree-sha1"]
+                            )
+                        if my_git_tree_sha1 == their_git_tree_sha1
+                            @debug(
+                                "good news: git-tree-sha1 values match",
+                                my_version,
+                                their_version,
+                                my_git_tree_sha1,
+                                their_git_tree_sha1,
+                                )
+                        else
+                            @error(
+                                "git-tree-sha1 mismatch",
+                                my_version,
+                                their_version,
+                                my_git_tree_sha1,
+                                their_git_tree_sha1,
+                                )
+                            error("git-tree-sha1 mismatch")
+                        end
+
+                    end
+                end
+            end
+        end
+    end
+    rm(my_depot; force = true, recursive = true,)
+    rm(my_environment;force = true,recursive = true,)
+    empty!(Base.DEPOT_PATH)
+    for x in original_depot_path
+        push!(Base.DEPOT_PATH, x,)
+    end
+    unique!(Base.DEPOT_PATH)
+    cd(original_directory)
+    return nothing
 end
 
 function test_registry(
@@ -168,8 +338,8 @@ function test_registry(
     for i = 1:n
         @debug("$(i). $(packages_to_clone_in_this_job_interval[i])")
     end
-    my_depot::String = joinpath(mktempdir(), "depot",)
-    my_environment::String = joinpath(mktempdir(), "depot",)
+    my_depot::String = joinpath(maketempdir(), "depot",)
+    my_environment::String = joinpath(maketempdir(), "depot",)
     rm(my_depot; force = true, recursive = true,)
     rm(my_environment;force = true,recursive = true,)
     mkpath(my_depot)
@@ -233,7 +403,7 @@ function test_registry(
                 )
         end
         repo_url = package_configuration["repo"]
-        tmp_repo_clone_path = mktempdir()
+        tmp_repo_clone_path = maketempdir()
         Base.shred!(LibGit2.CachedCredentials()) do creds
             LibGit2.with(
                 Pkg.GitTools.clone(
