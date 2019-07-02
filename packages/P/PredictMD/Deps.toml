@@ -1,13 +1,4 @@
-["0.26"]
-AutoGrad = "6710c13c-97f1-543f-91c5-74e8f7d95b35"
-Mux = "a975b10e-0019-58db-a62f-e48ff68538c9"
-PackageCompiler = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
-Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
-
-["0.26-0.27"]
-OnlineStats = "a15396b6-48d5-5d58-9928-6d29437db91e"
-
-["0.26-0.29"]
+["0.28-0.30"]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 Atom = "c52e3926-4ff0-5f6e-af25-54175e0327b1"
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
@@ -59,6 +50,9 @@ TimeSeries = "9e3dc215-6440-5c97-bce1-76c03772f85e"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 ValueHistories = "98cad3c8-aec3-5f06-8e41-884608649ab7"
 
-["0.29"]
+["0.29-0.30"]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+
+["0.30"]
+PredictMDAPI = "df4d2c64-811c-11e9-2782-c5e8d6893c98"

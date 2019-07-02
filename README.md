@@ -1,27 +1,13 @@
 # BCBIRegistry
 
-<a href="https://www.repostatus.org/#active"><img src="https://www.repostatus.org/badges/latest/active.svg" alt="Project Status: Active – The project has reached a stable, usable state and is being actively developed." /></a>
 
-<table>
-    <thead>
-        <tr>
-            <th></th>
-            <th>master</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>Travis CI</td>
-            <td><a href="https://travis-ci.org/bcbi/BCBIRegistry/branches">
-            <img
-            src="https://travis-ci.org/bcbi/BCBIRegistry.svg?branch=master"
-            /></a></td>
-        </tr>
-    </tbody>
-</table>
+<a
+href="https://travis-ci.org/bcbi/BCBIRegistry/branches">
+<img
+src="https://travis-ci.org/bcbi/BCBIRegistry.svg?branch=master"/>
+</a>
 
-This is a Julia package registry for [PredictMD](https://predictmd.net)
-and PredictMD-related packages.
+This is the official Julia package registry for the [Brown Center for Biomedical Informatics](https://github.com/bcbi).
 
 # Usage
 
